@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Malaysian License Plate Detector (Web)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: auto; }
+        .step-img { max-width: 100%; margin-bottom: 10px; border: 1px solid #ccc; }
+        .result { font-size: 1.2em; margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Malaysian License Plate Detector</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="image" accept="image/*" required>
+        <button type="submit">Upload & Detect</button>
+    </form>
+    <div id="steps"></div>
+    <div class="result" id="result"></div>
+</div>
+<script>
+    document.getElementById('uploadForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        document.getElementById('steps').innerHTML = 'Processing...';
+        document.getElementById('result').innerHTML = '';
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.status === 'success') {
+            let html = '';
+            for (let i = 0; i < data.steps.length; i++) {
+                html += `<div><b>${data.titles[i]}</b><br><img class='step-img' src='${data.steps[i]}'></div>`;
+            }
+            document.getElementById('steps').innerHTML = html;
+            document.getElementById('result').innerHTML = `<b>Detected Plate:</b> ${data.plate}<br><b>Classification:</b> ${data.classification}`;
+        } else {
+            document.getElementById('steps').innerHTML = '';
+            document.getElementById('result').innerHTML = 'Detection failed.';
+        }
+    };
+</script>
+</body>
+</html> 
