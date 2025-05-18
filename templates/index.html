@@ -31,22 +31,35 @@
 
     {% if image_file %}
     <div class="result">
-        <p><strong>原始OCR输出:</strong> {{ ocr_output }}</p>
-        <p><strong>清洗后车牌:</strong> <code>{{ cleaned_output }}</code></p>
-        <p><strong>注册州属:</strong> {{ state }}</p>
-        <p><strong>车辆类型:</strong> {{ plate_type }}</p>
-
         <h3>预处理步骤</h3>
         <div class="processing-steps">
-            {% for img_path in processing_images %}
+            {% for label, img_path in processing_images %}
             <div class="step-image">
-                <img src="{{ url_for('static', filename='results/' + img_path) }}" alt="步骤{{ loop.index }}">
-                <span class="step-label">步骤{{ loop.index }}</span>
+                <img src="{{ url_for('static', filename='results/' + img_path) }}" alt="{{ label }}">
+                <span class="step-label">{{ label }}</span>
             </div>
             {% endfor %}
         </div>
 
+        {% if candidates and candidates|length > 0 %}
+        <h3>候选车牌信息</h3>
+        <ul>
+            {% for c in candidates %}
+            <li>
+                <strong>Candidate {{ c.index }}</strong> at ({{ c.bbox[0] }}, {{ c.bbox[1] }}) [w={{ c.bbox[2] }}, h={{ c.bbox[3] }}] <br>
+                OCR: <code>{{ c.ocr }}</code>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
         <img src="{{ url_for('static', filename='results/' + image_file) }}" alt="上传的图像">
+        <div style="margin-top: 30px; padding: 20px; background: #e8f5e9; border-left: 5px solid #388e3c;">
+            <h3>最终识别结果</h3>
+            <p><strong>车牌号码:</strong> <code>{{ cleaned_output }}</code></p>
+            <p><strong>注册州属:</strong> {{ state }}</p>
+            <p><strong>车辆类型:</strong> {{ plate_type }}</p>
+        </div>
     </div>
     {% endif %}
 </div>

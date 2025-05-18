@@ -1,25 +1,29 @@
 # ocr_engine.py
 
-import pytesseract
-from PIL import Image
+import easyocr
+import numpy as np
+
+# Create a global EasyOCR reader instance (English, GPU off)
+reader = easyocr.Reader(['en'], gpu=False)
 
 def recognize_character(char_img):
     """
-    使用 Tesseract OCR 识别一个字符图像。
+    使用 EasyOCR 识别一个字符图像。
 
     参数:
-        char_img (np.array): 单个字符的二值图像（黑底白字）
+        char_img (np.array): 单个字符的二值或灰度图像
 
     返回:
         str: 识别出的字符
     """
-    pil_img = Image.fromarray(char_img)
-    config = '--psm 10 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    try:
-        text = pytesseract.image_to_string(pil_img, config=config).strip()
-    except:
-        text = ''
-    return text
+    if len(char_img.shape) == 2:
+        img_rgb = np.stack([char_img]*3, axis=-1)
+    else:
+        img_rgb = char_img
+    result = reader.readtext(img_rgb, detail=0, allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+    if result:
+        return result[0].strip()
+    return ''
 
 
 def postprocess_ocr_result(text):

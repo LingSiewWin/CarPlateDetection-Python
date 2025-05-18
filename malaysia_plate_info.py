@@ -4,17 +4,63 @@ import re
 import difflib
 
 def preprocess_ocr_text(text):
+    """
+    Preprocess OCR text with common corrections and format enforcement.
+    """
     text = text.upper().replace(' ', '').replace('-', '')
-    corrections = {
-        '0': 'O', '1': 'I', '8': 'B', '5': 'S', '6': 'G', '2': 'Z', 'Q': '0'
-    }
-    for wrong, right in corrections.items():
-        text = text.replace(wrong, right)
-    return text
+    
+    # Only correct the first 1-3 chars (prefix)
+    prefix_raw = text[:3]
+    number_raw = text[3:]
 
+    # Corrections for prefix only (letters only)
+    prefix_corrections = {
+        '0': 'O', '1': 'I', '8': 'B', '5': 'S', '6': 'G', '2': 'Z', 'Q': 'O',
+        '13': 'B'
+    }
+    for wrong, right in prefix_corrections.items():
+        prefix_raw = prefix_raw.replace(wrong, right)
+    prefix = ''.join(c for c in prefix_raw if c.isalpha())
+
+    # For the number part, convert common OCR letter errors to digits
+    number_corrections = {
+        'S': '5', 'B': '8', 'I': '1', 'O': '0', 'Z': '2', 'G': '6'
+    }
+    numbers = ''
+    for c in number_raw:
+        if c.isdigit():
+            numbers += c
+        elif c in number_corrections:
+            numbers += number_corrections[c]
+        # else: skip any other letters
+
+    return prefix + numbers
+
+def parse_plate_format(text):
+    """
+    Strictly parse and validate Malaysian plate format.
+    Returns (prefix, numbers, is_valid)
+    """
+    text = preprocess_ocr_text(text)
+    
+    # Malaysian plate format: 1-3 letters followed by 1-4 numbers
+    pattern = r'^([A-Z]{1,3})(\d{1,4})$'
+    match = re.match(pattern, text)
+    
+    if match:
+        prefix, numbers = match.groups()
+        return prefix, numbers, True
+    return None, None, False
 
 def identify_state(text):
+    """
+    Identify state and plate type from the plate text.
+    """
     text = preprocess_ocr_text(text)
+    prefix, numbers, is_valid = parse_plate_format(text)
+    
+    if not is_valid:
+        return "Invalid Format", "Unknown"
 
     peninsular_states = {
         'A': ('Perak', 'Private'),
@@ -35,33 +81,9 @@ def identify_state(text):
         'KV': ('Langkawi', 'Private')
     }
 
-    sarawak_divisions = {
-        'QA': ('Kuching', 'Private'),
-        'QB': ('Sri Aman/Betong', 'Private'),
-        'QC': ('Samarahan/Serian', 'Private'),
-        'QD': ('Bintulu', 'Private'),
-        'QL': ('Limbang', 'Private'),
-        'QM': ('Miri', 'Private'),
-        'QP': ('Kapit', 'Private'),
-        'QR': ('Sarikei', 'Private'),
-        'QS': ('Sibu/Mukah', 'Private'),
-        'QSG': ('Sarawak Government', 'Government')
-    }
-
-    sabah_divisions = {
-        'SA': ('West Coast', 'Private'),
-        'SB': ('Beaufort', 'Private'),
-        'SD': ('Lahad Datu', 'Private'),
-        'SJ': ('West Coast', 'Private'),
-        'SK': ('Kudat', 'Private'),
-        'SM': ('Sandakan', 'Private'),
-        'SS': ('Sandakan', 'Private'),
-        'ST': ('Tawau', 'Private'),
-        'SU': ('Keningau', 'Private'),
-        'SW': ('Tawau', 'Private'),
-        'SG': ('Sabah Government', 'Government'),
-        'SMJ': ('Sabah Government', 'Government')
-    }
+    # Simplified Sabah and Sarawak divisions
+    sarawak_prefixes = ['QA', 'QB', 'QC', 'QD', 'QL', 'QM', 'QP', 'QR', 'QS', 'QSG']
+    sabah_prefixes = ['SA', 'SB', 'SD', 'SJ', 'SK', 'SM', 'SS', 'ST', 'SU', 'SW', 'SG', 'SMJ']
 
     special_plates = {
         'TAXI': ('Taxi', 'Commercial'),
@@ -77,30 +99,27 @@ def identify_state(text):
         'ZU': ('Royal Malaysian Air Force', 'Military'),
         'ZZ': ('Ministry of Defence', 'Military'),
         'G': ('Government', 'Government'),
-        'LIMO': ('KLIA Limousine', 'Commercial')
     }
 
-    all_prefixes = (
-        list(peninsular_states.keys()) +
-        list(sarawak_divisions.keys()) +
-        list(sabah_divisions.keys()) +
-        list(special_plates.keys())
-    )
+    # Check for special plates first
+    for i in range(2, min(5, len(prefix)) + 1):
+        test_prefix = prefix[:i]
+        if test_prefix in special_plates:
+            return special_plates[test_prefix]
 
-    for i in range(2, min(5, len(text)) + 1):
-        prefix = text[:i]
-        matches = difflib.get_close_matches(prefix, all_prefixes, n=1, cutoff=0.8)
-        if matches:
-            prefix = matches[0]
-            if prefix in special_plates:
-                return special_plates[prefix]
-            elif prefix in sarawak_divisions:
-                return sarawak_divisions[prefix]
-            elif prefix in sabah_divisions:
-                return sabah_divisions[prefix]
-            elif prefix in peninsular_states:
-                return peninsular_states[prefix]
+    # Check for Sarawak
+    if any(prefix.startswith(p) for p in sarawak_prefixes):
+        return ('Sarawak', 'Private')
 
+    # Check for Sabah
+    if any(prefix.startswith(p) for p in sabah_prefixes):
+        return ('Sabah', 'Private')
+
+    # Check peninsular states
+    if prefix in peninsular_states:
+        return peninsular_states[prefix]
+
+    # Special patterns for diplomatic and military plates
     special_patterns = {
         r'CC\d+': ('Diplomatic Corps', 'Diplomatic'),
         r'\d+-\d+-UN': ('United Nations', 'Diplomatic'),
