@@ -17,6 +17,9 @@
         .processing-steps { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
         .step-image { width: calc(25% - 10px); position: relative; }
         .step-label { position: absolute; top: 5px; left: 5px; background: rgba(255,255,255,0.8); padding: 2px 5px; font-size: 12px; font-weight: bold; }
+        .candidates-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .candidates-table th, .candidates-table td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        .candidates-table th { background-color: #f8f8f8; }
     </style>
 </head>
 <body>
@@ -41,16 +44,29 @@
             {% endfor %}
         </div>
 
-        {% if candidates and candidates|length > 0 %}
-        <h3>候选车牌信息</h3>
-        <ul>
-            {% for c in candidates %}
-            <li>
-                <strong>Candidate {{ c.index }}</strong> at ({{ c.bbox[0] }}, {{ c.bbox[1] }}) [w={{ c.bbox[2] }}, h={{ c.bbox[3] }}] <br>
-                OCR: <code>{{ c.ocr }}</code>
-            </li>
+        {% set valid_candidates = candidates | selectattr('ocr') | select | list %}
+        {% if valid_candidates and valid_candidates|length > 0 %}
+        <h3 style="margin-top: 30px;">Candidate Plate Information</h3>
+        <table class="candidates-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Position (x, y)</th>
+              <th>Size (w × h)</th>
+              <th>OCR Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in valid_candidates %}
+            <tr>
+              <td>{{ c.index }}</td>
+              <td>({{ c.bbox[0] }}, {{ c.bbox[1] }})</td>
+              <td>{{ c.bbox[2] }} × {{ c.bbox[3] }}</td>
+              <td><code>{{ c.ocr }}</code></td>
+            </tr>
             {% endfor %}
-        </ul>
+          </tbody>
+        </table>
         {% endif %}
 
         <img src="{{ url_for('static', filename='results/' + image_file) }}" alt="上传的图像">
