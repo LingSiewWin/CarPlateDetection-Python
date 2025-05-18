@@ -6,13 +6,13 @@ import re
 
 def segment_characters(binary_img):
     """
-    使用投影法对预处理后的图像进行字符分割。
+    Use projection method to segment characters from the preprocessed binary image.
 
-    参数:
-        binary_img (np.array): 增强后的二值图像
+    Args:
+        binary_img (np.array): Enhanced binary image
 
-    返回:
-        list: 分割出的字符图像列表
+    Returns:
+        list: List of segmented character images
     """
     contours, _ = cv2.findContours(binary_img.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -23,7 +23,7 @@ def segment_characters(binary_img):
             char_candidate = binary_img[y:y+h, x:x+w]
             char_candidates.append((x, char_candidate))
 
-    # 按照从左到右排序
+    # Sort from left to right
     char_candidates.sort(key=lambda x: x[0])
     characters = [ch[1] for ch in char_candidates]
 

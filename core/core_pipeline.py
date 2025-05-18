@@ -10,8 +10,8 @@ from core.ocr_engine import recognize_character, postprocess_ocr_result
 
 def process_license_plate(image_path):
     """
-    完整的车牌识别流程，保存每一步的中间结果：
-    1. 原始图像
+    Complete license plate recognition pipeline, saving intermediate results at each step:
+    1. Original image
     2. Grayscale
     3. CLAHE Enhanced
     4. Bilateral Filtered
@@ -28,7 +28,7 @@ def process_license_plate(image_path):
     # 1. Load image
     img = cv2.imread(image_path)
     if img is None:
-        return {"error": "无法加载图像"}
+        return {"error": "Unable to load image"}
 
     step_images = []
     def save_step(label, img_data):
@@ -205,11 +205,79 @@ def process_license_plate(image_path):
         raw_results = [recognize_character(ch) for ch in chars]
         best_ocr = postprocess_ocr_result(''.join(raw_results))
 
+    # Check for a valid full plate among candidates
+    valid_full_plate = None
+    for c in candidate_info:
+        ocr = c.get('ocr', '').upper()
+        if is_valid_plate_format(ocr):
+            valid_full_plate = ocr
+            break
+    if valid_full_plate:
+        final_plate = valid_full_plate
+    else:
+        # Combine candidates if possible
+        combined_plate = combine_ocr_candidates(candidate_info)
+        final_plate = best_ocr
+        if combined_plate:
+            final_plate = combined_plate
+    # Always clean the final plate before display/state detection
+    prefix, number = split_plate(final_plate)
+    clean_final_plate = clean_prefix(prefix) + clean_number(number)
     return {
         "raw_ocr": best_ocr,
-        "cleaned_output": best_ocr,
+        "cleaned_output": clean_final_plate,
         "processing_images": step_images,
         "candidates": candidate_info,
         "parallel_candidates": parallel_results,
         "parallel_best_ocr": parallel_best_ocr
     }
+
+def clean_prefix(prefix):
+    """Correct common OCR digit mistakes in the prefix (alphabet part)."""
+    corrections = {'0': 'O', '1': 'I', '2': 'Z', '5': 'S', '6': 'G', '8': 'B'}
+    return ''.join(corrections.get(ch, ch) for ch in prefix)
+
+def clean_number(number):
+    """Correct common OCR letter mistakes in the number part."""
+    corrections = {'B': '8', 'S': '5', 'I': '1', 'O': '0', 'Z': '2', 'G': '6'}
+    return ''.join(corrections.get(ch, ch) for ch in number)
+
+def combine_ocr_candidates(candidate_info):
+    """
+    Combine OCR results from candidates: if there is one candidate that is all letters and another that is all numbers (or mostly numbers),
+    combine them as letters+numbers (e.g., AKE9005). Returns the combined string if found, else None.
+    Also applies cleaning to correct common OCR mistakes in both parts.
+    """
+    import re
+    letters = None
+    numbers = None
+    for c in candidate_info:
+        ocr = c.get('ocr', '').upper()
+        if len(ocr) < 2:
+            continue
+        # Accept if all letters
+        if re.fullmatch(r'[A-Z]{2,}', ocr):
+            letters = ocr
+        # Accept if all digits or mostly digits with 1 letter (common OCR mistake)
+        elif re.fullmatch(r'[0-9]{2,}[A-Z]?', ocr) or re.fullmatch(r'[0-9A-Z]{2,}', ocr):
+            # Accept if at least 2 digits
+            digits = sum(1 for ch in ocr if ch.isdigit())
+            if digits >= 2:
+                numbers = ocr
+    if letters and numbers:
+        clean_letters = clean_prefix(letters)
+        clean_numbers = clean_number(numbers)
+        return clean_letters + clean_numbers
+    return None
+
+def split_plate(plate):
+    """Split a plate string into prefix (letters) and number (digits) parts."""
+    import re
+    match = re.match(r'^([A-Z]{1,3})([0-9A-Z]{1,4})$', plate)
+    if match:
+        return match.group(1), match.group(2)
+    return plate, ''
+
+def is_valid_plate_format(plate):
+    import re
+    return re.fullmatch(r'[A-Z]{1,3}[0-9]{1,4}', plate) is not None

@@ -1,79 +1,195 @@
 <!-- templates/index.html -->
 
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>马来西亚车牌识别系统</title>
+    <title>Malaysia License Plate Recognition System</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h1 { text-align: center; color: #333; }
-        form { margin-bottom: 20px; }
-        button { margin-top: 15px; padding: 10px 20px; background-color: #2e7d32; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:hover { background-color: #1b5e20; }
-        .result { margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-left: 5px solid #2e7d32; }
-        img { max-width: 100%; height: auto; margin-top: 20px; border: 1px solid #ddd; padding: 5px; }
-        .processing-steps { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-        .step-image { width: calc(25% - 10px); position: relative; }
-        .step-label { position: absolute; top: 5px; left: 5px; background: rgba(255,255,255,0.8); padding: 2px 5px; font-size: 12px; font-weight: bold; }
-        .candidates-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .candidates-table th, .candidates-table td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        .upload-section { margin-bottom: 30px; }
+        .file-input-wrapper { width: 100%; margin-bottom: 20px; }
+        .file-input-wrapper input[type="file"] {
+            width: 100%;
+            padding: 20px 0;
+            font-size: 1.2em;
+            border: 2px solid #388e3c;
+            border-radius: 6px;
+            background: #f8f8f8;
+            cursor: pointer;
+        }
+        .uploaded-image-preview {
+            display: block;
+            margin: 0 auto 20px auto;
+            max-width: 100%;
+            max-height: 300px;
+            border: 2px solid #bdbdbd;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-radius: 6px;
+        }
+        .detect-btn {
+            display: block;
+            width: 100%;
+            padding: 15px 0;
+            font-size: 1.2em;
+            background-color: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .detect-btn:hover { background-color: #1b5e20; }
+        .processing-steps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-gap: 18px;
+            margin-top: 30px;
+            margin-bottom: 30px;
+        }
+        .step-image {
+            position: relative;
+            background: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px;
+            text-align: center;
+        }
+        .step-label {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(255,255,255,0.85);
+            padding: 2px 8px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 3px;
+        }
+        .final-row {
+            display: flex;
+            gap: 24px;
+            margin-top: 18px;
+            align-items: flex-start;
+        }
+        .candidates-table {
+            width: 350px;
+            border-collapse: collapse;
+            margin-top: 0;
+        }
+        .candidates-table th, .candidates-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
         .candidates-table th { background-color: #f8f8f8; }
+        .final-result-box {
+            margin-top: 40px;
+            padding: 28px;
+            background: #e8f5e9;
+            border-left: 6px solid #388e3c;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .final-result-box h2 {
+            margin-bottom: 18px;
+            color: #222;
+        }
+        .final-result-box p {
+            font-size: 1.2em;
+        }
     </style>
+    <script>
+    function previewImage(input) {
+        const preview = document.getElementById('uploaded-image-preview');
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            }
+            reader.readAsDataURL(input.files[0]);
+        } else {
+            preview.src = '';
+            preview.style.display = 'none';
+        }
+    }
+    </script>
 </head>
 <body>
 <div class="container">
-    <h1>马来西亚车牌识别系统</h1>
-
-    <form method="POST" enctype="multipart/form-data">
-        <label for="image">选择图像：</label><br>
-        <input type="file" name="image"><br><br>
-        <button type="submit">上传并识别</button>
+    <h1>Malaysia License Plate Recognition System</h1>
+    <form method="POST" enctype="multipart/form-data" class="upload-section">
+        <div class="file-input-wrapper">
+            <input type="file" name="image" id="image" onchange="previewImage(this)">
+        </div>
+        <img id="uploaded-image-preview" class="uploaded-image-preview" style="display:none;" alt="Uploaded Image Preview">
+        <button type="submit" class="detect-btn">Detect</button>
     </form>
 
     {% if image_file %}
     <div class="result">
-        <h3>预处理步骤</h3>
-        <div class="processing-steps">
+        {% set step_count = processing_images|length %}
+        {% set steps_per_row = 3 %}
+        {% set rows = (step_count // steps_per_row) + (1 if step_count % steps_per_row > 0 else 0) %}
+        {% set last_label = 'Final Annotated Image' %}
+        {% set last_idx = None %}
+        {% for label, img_path in processing_images %}
+            {% if label == last_label %}
+                {% set last_idx = loop.index0 %}
+            {% endif %}
+        {% endfor %}
+        <div class="processing-steps-grid">
             {% for label, img_path in processing_images %}
-            <div class="step-image">
-                <img src="{{ url_for('static', filename='results/' + img_path) }}" alt="{{ label }}">
-                <span class="step-label">{{ label }}</span>
-            </div>
+                {% if label != last_label %}
+                <div class="step-image">
+                    <img src="{{ url_for('static', filename='results/' + img_path) }}" alt="{{ label }}" style="max-width: 100%; border-radius: 4px;">
+                    <span class="step-label">{{ label }}</span>
+                </div>
+                {% endif %}
             {% endfor %}
         </div>
-
-        {% set valid_candidates = candidates | selectattr('ocr') | select | list %}
-        {% if valid_candidates and valid_candidates|length > 0 %}
-        <h3 style="margin-top: 30px;">Candidate Plate Information</h3>
-        <table class="candidates-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Position (x, y)</th>
-              <th>Size (w × h)</th>
-              <th>OCR Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for c in valid_candidates %}
-            <tr>
-              <td>{{ c.index }}</td>
-              <td>({{ c.bbox[0] }}, {{ c.bbox[1] }})</td>
-              <td>{{ c.bbox[2] }} × {{ c.bbox[3] }}</td>
-              <td><code>{{ c.ocr }}</code></td>
-            </tr>
+        <div class="final-row">
+            {% for label, img_path in processing_images %}
+                {% if label == last_label %}
+                <div class="step-image" style="min-width: 260px;">
+                    <img src="{{ url_for('static', filename='results/' + img_path) }}" alt="{{ label }}" style="max-width: 100%; border-radius: 4px;">
+                    <span class="step-label">{{ label }}</span>
+                </div>
+                {% endif %}
             {% endfor %}
-          </tbody>
-        </table>
-        {% endif %}
-
-        <img src="{{ url_for('static', filename='results/' + image_file) }}" alt="上传的图像">
-        <div style="margin-top: 30px; padding: 20px; background: #e8f5e9; border-left: 5px solid #388e3c;">
-            <h3>最终识别结果</h3>
-            <p><strong>车牌号码:</strong> <code>{{ cleaned_output }}</code></p>
-            <p><strong>注册州属:</strong> {{ state }}</p>
+            {% set valid_candidates = candidates | selectattr('ocr') | select | list %}
+            {% if valid_candidates and valid_candidates|length > 0 %}
+            <div style="flex:1;">
+                <h3>Candidate Plate Information</h3>
+                <table class="candidates-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Position (x, y)</th>
+                      <th>Size (w × h)</th>
+                      <th>OCR Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for c in valid_candidates %}
+                    <tr>
+                      <td>{{ c.index }}</td>
+                      <td>({{ c.bbox[0] }}, {{ c.bbox[1] }})</td>
+                      <td>{{ c.bbox[2] }} × {{ c.bbox[3] }}</td>
+                      <td><code>{{ c.ocr }}</code></td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+        <div class="final-result-box">
+            <h2>Final Recognition Result</h2>
+            <p><strong>Plate Number:</strong> <code style="font-size: 1.2em;">{{ cleaned_output }}</code></p>
+            <p><strong>Registered State:</strong> {{ state }}</p>
         </div>
     </div>
     {% endif %}

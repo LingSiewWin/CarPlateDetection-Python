@@ -8,13 +8,13 @@ reader = easyocr.Reader(['en'], gpu=False)
 
 def recognize_character(char_img):
     """
-    使用 EasyOCR 识别一个字符图像。
+    Use EasyOCR to recognize a single character image.
 
-    参数:
-        char_img (np.array): 单个字符的二值或灰度图像
+    Args:
+        char_img (np.array): Single character binary or grayscale image
 
-    返回:
-        str: 识别出的字符
+    Returns:
+        str: Recognized character
     """
     if len(char_img.shape) == 2:
         img_rgb = np.stack([char_img]*3, axis=-1)
@@ -28,13 +28,13 @@ def recognize_character(char_img):
 
 def postprocess_ocr_result(text):
     """
-    对OCR结果进行后处理,包括上下文纠错和格式标准化。
+    Post-process the OCR result, including context correction and format normalization.
 
-    参数:
-        text (str): OCR原始输出字符串
+    Args:
+        text (str): Raw OCR output string
 
-    返回:
-        str: 纠错后的结果
+    Returns:
+        str: Corrected result
     """
     corrections = {
         '0': 'O', '1': 'I', '8': 'B', '5': 'S',
