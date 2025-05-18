@@ -1,45 +1,54 @@
+<!-- templates/index.html -->
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>Malaysian License Plate Detector (Web)</title>
+    <title>马来西亚车牌识别系统</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 600px; margin: auto; }
-        .step-img { max-width: 100%; margin-bottom: 10px; border: 1px solid #ccc; }
-        .result { font-size: 1.2em; margin-top: 20px; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        form { margin-bottom: 20px; }
+        button { margin-top: 15px; padding: 10px 20px; background-color: #2e7d32; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #1b5e20; }
+        .result { margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-left: 5px solid #2e7d32; }
+        img { max-width: 100%; height: auto; margin-top: 20px; border: 1px solid #ddd; padding: 5px; }
+        .processing-steps { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+        .step-image { width: calc(25% - 10px); position: relative; }
+        .step-label { position: absolute; top: 5px; left: 5px; background: rgba(255,255,255,0.8); padding: 2px 5px; font-size: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2>Malaysian License Plate Detector</h2>
-    <form id="uploadForm" enctype="multipart/form-data">
-        <input type="file" name="image" accept="image/*" required>
-        <button type="submit">Upload & Detect</button>
+    <h1>马来西亚车牌识别系统</h1>
+
+    <form method="POST" enctype="multipart/form-data">
+        <label for="image">选择图像：</label><br>
+        <input type="file" name="image"><br><br>
+        <button type="submit">上传并识别</button>
     </form>
-    <div id="steps"></div>
-    <div class="result" id="result"></div>
+
+    {% if image_file %}
+    <div class="result">
+        <p><strong>原始OCR输出:</strong> {{ ocr_output }}</p>
+        <p><strong>清洗后车牌:</strong> <code>{{ cleaned_output }}</code></p>
+        <p><strong>注册州属:</strong> {{ state }}</p>
+        <p><strong>车辆类型:</strong> {{ plate_type }}</p>
+
+        <h3>预处理步骤</h3>
+        <div class="processing-steps">
+            {% for img_path in processing_images %}
+            <div class="step-image">
+                <img src="{{ url_for('static', filename='results/' + img_path) }}" alt="步骤{{ loop.index }}">
+                <span class="step-label">步骤{{ loop.index }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <img src="{{ url_for('static', filename='results/' + image_file) }}" alt="上传的图像">
+    </div>
+    {% endif %}
 </div>
-<script>
-    document.getElementById('uploadForm').onsubmit = async function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        document.getElementById('steps').innerHTML = 'Processing...';
-        document.getElementById('result').innerHTML = '';
-        const res = await fetch('/upload', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (data.status === 'success') {
-            let html = '';
-            for (let i = 0; i < data.steps.length; i++) {
-                html += `<div><b>${data.titles[i]}</b><br><img class='step-img' src='${data.steps[i]}'></div>`;
-            }
-            document.getElementById('steps').innerHTML = html;
-            document.getElementById('result').innerHTML = `<b>Detected Plate:</b> ${data.plate}<br><b>Classification:</b> ${data.classification}`;
-        } else {
-            document.getElementById('steps').innerHTML = '';
-            document.getElementById('result').innerHTML = 'Detection failed.';
-        }
-    };
-</script>
 </body>
-</html> 
+</html>

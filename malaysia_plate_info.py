@@ -1,16 +1,21 @@
+# malaysia_plate_info.py
+
 import re
+import difflib
+
+def preprocess_ocr_text(text):
+    text = text.upper().replace(' ', '').replace('-', '')
+    corrections = {
+        '0': 'O', '1': 'I', '8': 'B', '5': 'S', '6': 'G', '2': 'Z', 'Q': '0'
+    }
+    for wrong, right in corrections.items():
+        text = text.replace(wrong, right)
+    return text
+
 
 def identify_state(text):
-    """
-    Identifies Malaysian state or plate type from license plate text.
-    Parameters:
-        text (str): License plate number string
-    Returns:
-        tuple: (state, plate_type)
-    """
-    # Normalize input
-    text = text.upper().replace('-', '').replace(' ', '')
-    # Peninsular Malaysia prefixes (single/double letter)
+    text = preprocess_ocr_text(text)
+
     peninsular_states = {
         'A': ('Perak', 'Private'),
         'B': ('Selangor', 'Private'),
@@ -29,7 +34,7 @@ def identify_state(text):
         'F': ('Putrajaya', 'Private'),
         'KV': ('Langkawi', 'Private')
     }
-    # Sarawak divisions (QA, QB, QC...)
+
     sarawak_divisions = {
         'QA': ('Kuching', 'Private'),
         'QB': ('Sri Aman/Betong', 'Private'),
@@ -42,7 +47,7 @@ def identify_state(text):
         'QS': ('Sibu/Mukah', 'Private'),
         'QSG': ('Sarawak Government', 'Government')
     }
-    # Sabah divisions (SA, SB, SD...)
+
     sabah_divisions = {
         'SA': ('West Coast', 'Private'),
         'SB': ('Beaufort', 'Private'),
@@ -57,7 +62,7 @@ def identify_state(text):
         'SG': ('Sabah Government', 'Government'),
         'SMJ': ('Sabah Government', 'Government')
     }
-    # Special plates
+
     special_plates = {
         'TAXI': ('Taxi', 'Commercial'),
         'CC': ('Diplomatic Corps', 'Diplomatic'),
@@ -74,11 +79,28 @@ def identify_state(text):
         'G': ('Government', 'Government'),
         'LIMO': ('KLIA Limousine', 'Commercial')
     }
-    # Step 1: Check for special plate formats
-    for key, value in special_plates.items():
-        if key in text:
-            return value[0], value[1]
-    # Use regex to match patterns like CC1234 or 12-34-UN
+
+    all_prefixes = (
+        list(peninsular_states.keys()) +
+        list(sarawak_divisions.keys()) +
+        list(sabah_divisions.keys()) +
+        list(special_plates.keys())
+    )
+
+    for i in range(2, min(5, len(text)) + 1):
+        prefix = text[:i]
+        matches = difflib.get_close_matches(prefix, all_prefixes, n=1, cutoff=0.8)
+        if matches:
+            prefix = matches[0]
+            if prefix in special_plates:
+                return special_plates[prefix]
+            elif prefix in sarawak_divisions:
+                return sarawak_divisions[prefix]
+            elif prefix in sabah_divisions:
+                return sabah_divisions[prefix]
+            elif prefix in peninsular_states:
+                return peninsular_states[prefix]
+
     special_patterns = {
         r'CC\d+': ('Diplomatic Corps', 'Diplomatic'),
         r'\d+-\d+-UN': ('United Nations', 'Diplomatic'),
@@ -86,19 +108,9 @@ def identify_state(text):
         r'Z[A-Z]\d+': ('Malaysian Armed Forces', 'Military'),
         r'ZZ\d+': ('Ministry of Defence', 'Military')
     }
+
     for pattern, result in special_patterns.items():
         if re.search(pattern, text):
             return result
-    # Step 2: Check Sarawak and Sabah division prefixes
-    if len(text) >= 2:
-        prefix = text[:2]
-        if prefix in sarawak_divisions:
-            return sarawak_divisions[prefix][0], sarawak_divisions[prefix][1]
-        elif prefix in sabah_divisions:
-            return sabah_divisions[prefix][0], sabah_divisions[prefix][1]
-    # Step 3: Check Peninsular Malaysia states
-    for i in range(min(2, len(text)), 0, -1):
-        if text[:i] in peninsular_states:
-            return peninsular_states[text[:i]][0], peninsular_states[text[:i]][1]
-    # Default unknown
-    return "Unknown", "Unknown" 
+
+    return "Unknown", "Unknown"
