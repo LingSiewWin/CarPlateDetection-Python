@@ -115,9 +115,9 @@ def identify_state(text):
     if any(prefix.startswith(p) for p in sabah_prefixes):
         return ('Sabah', 'Private')
 
-    # Check peninsular states
-    if prefix in peninsular_states:
-        return peninsular_states[prefix]
+    # Check peninsular states using only the first letter
+    if prefix and prefix[0] in peninsular_states:
+        return peninsular_states[prefix[0]]
 
     # Special patterns for diplomatic and military plates
     special_patterns = {
