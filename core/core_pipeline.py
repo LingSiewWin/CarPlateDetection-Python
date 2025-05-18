@@ -75,7 +75,7 @@ def process_license_plate(image_path):
     morphed = cv2.morphologyEx(canny, cv2.MORPH_CLOSE, kernel, iterations=2)
     save_step("Morphed (Noise Reduced)", morphed)
 
-    # 9. Candidate Contours
+    # 9. Candidate Contours (original pipeline)
     contours, _ = cv2.findContours(morphed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contour_img = img.copy()
     candidates = []
@@ -125,6 +125,76 @@ def process_license_plate(image_path):
         cv2.putText(annotated, f"Best: {best_ocr}", (x, y+h+30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,255), 2)
     save_step("Final Annotated Image", annotated)
 
+    # --- Parallel: Relaxed 4-corner contour detection ---
+    parallel_candidates = []
+    parallel_best_ocr = ""
+    parallel_best_score = 0
+    parallel_best_bbox = None
+    parallel_results = []
+    # Use RETR_TREE to get all contours
+    all_contours, _ = cv2.findContours(morphed, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    all_contours = sorted(all_contours, key=cv2.contourArea, reverse=True)[:10]
+    for idx, contour in enumerate(all_contours):
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+        if len(approx) == 4:
+            mask = np.zeros(gray.shape, np.uint8)
+            cv2.drawContours(mask, [approx], 0, 255, -1)
+            plate_img = cv2.bitwise_and(img, img, mask=mask)
+            (x, y) = np.where(mask == 255)
+            if len(x) == 0 or len(y) == 0:
+                continue
+            (x1, y1) = (np.min(y), np.min(x))
+            (x2, y2) = (np.max(y), np.max(x))
+            cropped_plate = gray[y1:y2+1, x1:x2+1]
+            if cropped_plate.size == 0:
+                continue
+            # Resize for better OCR
+            plate_crop = cv2.resize(cropped_plate, (max(60, (x2-x1)*3), max(20, (y2-y1)*3)), interpolation=cv2.INTER_CUBIC)
+            # Threshold for OCR
+            _, plate_bin = cv2.threshold(plate_crop, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            ocr_result = postprocess_ocr_result(recognize_character(plate_bin))
+            # Validate with strict format
+            from core.char_segmentation import is_valid_plate_format
+            if is_valid_plate_format(ocr_result):
+                parallel_results.append({
+                    "index": idx+1,
+                    "bbox": (x1, y1, x2-x1, y2-y1),
+                    "ocr": ocr_result
+                })
+                score = len([c for c in ocr_result if c.isalnum()])
+                if score > parallel_best_score:
+                    parallel_best_score = score
+                    parallel_best_ocr = ocr_result
+                    parallel_best_bbox = (x1, y1, x2-x1, y2-y1)
+    # If no valid, still show the best (for debug)
+    if not parallel_results and all_contours:
+        for idx, contour in enumerate(all_contours):
+            peri = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+            if len(approx) == 4:
+                mask = np.zeros(gray.shape, np.uint8)
+                cv2.drawContours(mask, [approx], 0, 255, -1)
+                plate_img = cv2.bitwise_and(img, img, mask=mask)
+                (x, y) = np.where(mask == 255)
+                if len(x) == 0 or len(y) == 0:
+                    continue
+                (x1, y1) = (np.min(y), np.min(x))
+                (x2, y2) = (np.max(y), np.max(x))
+                cropped_plate = gray[y1:y2+1, x1:x2+1]
+                if cropped_plate.size == 0:
+                    continue
+                plate_crop = cv2.resize(cropped_plate, (max(60, (x2-x1)*3), max(20, (y2-y1)*3)), interpolation=cv2.INTER_CUBIC)
+                _, plate_bin = cv2.threshold(plate_crop, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                ocr_result = postprocess_ocr_result(recognize_character(plate_bin))
+                parallel_results.append({
+                    "index": idx+1,
+                    "bbox": (x1, y1, x2-x1, y2-y1),
+                    "ocr": ocr_result
+                })
+                break
+    # --- End parallel branch ---
+
     # If no candidates, fallback to color segmentation pipeline
     if not candidates:
         plate_candidate = find_malaysia_plates(img)
@@ -139,5 +209,7 @@ def process_license_plate(image_path):
         "raw_ocr": best_ocr,
         "cleaned_output": best_ocr,
         "processing_images": step_images,
-        "candidates": candidate_info
+        "candidates": candidate_info,
+        "parallel_candidates": parallel_results,
+        "parallel_best_ocr": parallel_best_ocr
     }
